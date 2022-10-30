@@ -117,11 +117,16 @@ for info in get_file_info(target_file, 'target'):
 for info in get_file_info(decoy_file, 'decoy'):
     output.append(info)
 
-result = class_fdr(output)
+scores = {idx:float(o[2]) for idx, o in enumerate(output)}
+
+sort_output = [output[k] for k, v in sorted(scores.items(), key=lambda item: item[1], reverse=True)]
+
+result = class_fdr(sort_output)
+
 outfile = "{0}_classFDR.txt".format(target_file.rstrip('txt').rstrip('.'))
 with open(outfile, 'w') as outf:
-    outf.write('Peptide\tModification\tProtein\tXcorr\tPercolator_qvalue\tclass_FDR\n')
-    outf.writelines('\t'.join(i) + '\n' for i in output)
+   outf.write('Peptide\tModification\tProtein\tXcorr\tPercolator_qvalue\tclass_FDR\tFDP\tclassFDR_error\n')
+   outf.writelines('\t'.join(i) + '\n' for i in result)
 
 
     
