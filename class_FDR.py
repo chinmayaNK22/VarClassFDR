@@ -33,7 +33,7 @@ def class_fdr(psm_info):
         #specEval = -np.log10(float(row[specEval_col]))
         xcorr = float(line[2])
     
-        if "XXX_SAAV" in pro:
+        if "XXX_" in pro:
             decoycount+=1
             if decoy_prefix in pro:
                 novel_decoycount+=1
@@ -54,7 +54,7 @@ def class_fdr(psm_info):
         x.append(score)
         frac=float(decoy_dic[score][0]/decoy_dic[score][1])
         y.append(frac)
-        if 0<score<10:
+        if 0.5<score<10:
             x_filter.append(score)
             y_filter.append(frac)
         
@@ -97,7 +97,7 @@ def class_fdr(psm_info):
         
         if novelFDR < psm_qval:
             if "XXX_SAAV@" not in pro: #write only target PSMs
-                output.append([pep, pro, xcorr, line[3], str(novelFDR), str(novpep_dic[pep])])
+                output.append([pep.split('_')[0], pep.split('_')[1], pro, xcorr, line[3], str(novelFDR), str(novpep_dic[pep])])
             #line.append(str(novelFDR))
             #line.append(str(novpep_dic[pep]))
        
