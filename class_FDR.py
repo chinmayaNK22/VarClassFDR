@@ -54,7 +54,7 @@ def class_fdr(psm_info):
         x.append(score)
         frac=float(decoy_dic[score][0]/decoy_dic[score][1])
         y.append(frac)
-        if 0.5<score<10:
+        if 0.5<score:
             x_filter.append(score)
             y_filter.append(frac)
         
@@ -73,8 +73,11 @@ def class_fdr(psm_info):
 
     #input2=open(input_file,'r')
     
+    new_noveltargetcount = 0
+    new_noveldecoycount = 0
+    new_score_dic = {}
+    int_output = []
     for line in psm_info:
-        #row=line.strip().split('\t')
         pep=line[0]
         pro=line[1]
         if novel_prefix not in pro:
@@ -83,26 +86,47 @@ def class_fdr(psm_info):
         #specEval = -np.log10(float(row[specEval_col]))
         xcorr = float(line[2])
         counts = score_dic[xcorr]   
-    
-        targetcount=float(counts[0])
-        decoycount=float(counts[1])
-        FDR=decoycount/targetcount
-    
+
+        target_n=float(counts[0])
+        decoy_n=float(counts[1])
+        FDR=decoy_n/target_n
+
         novel_targetcount=float(counts[2])
         gamma = poly.polyval(xcorr, coefs)
-        novelFDR = FDR*gamma*(targetcount/novel_targetcount)
-    
+        gamma = (coefs[1] * xcorr) + coefs[0]
+        classFDR = FDR*gamma*(target_n/novel_targetcount)
+
         if pep not in novpep_dic:
-            novpep_dic[pep]= novelFDR
-        
-        if novelFDR < psm_qval:
-            if "XXX_SAAV@" not in pro: #write only target PSMs
-                output.append([pep.split('_')[0], pep.split('_')[1], pro, xcorr, line[3], str(novelFDR), str(novpep_dic[pep])])
+            novpep_dic[pep] = classFDR
+    
+        if "XXX_SAAV@" not in pro: #write only target PSMs
+            int_output.append([pep, pro, xcorr, line[3], classFDR, novpep_dic[pep]])
+            if classFDR < psm_qval:
+                new_noveltargetcount +=1
+            elif classFDR > psm_qval:
+                new_noveldecoycount +=1
+
+            new_score_dic[xcorr] = [new_noveltargetcount,new_noveldecoycount]
+
+            #output.append([pep.split('_')[0], pep.split('_')[1], pro, str(xcorr), str(line[3]), str(classFDR), str(novpep_dic[pep])])
             #line.append(str(novelFDR))
             #line.append(str(novpep_dic[pep]))
-       
+   
             #output.write("\t".join(row)+"\n")
-    
+
+    for line in int_output:
+        pep=line[0]
+        pro=line[1]
+        xcorr = float(line[2])
+        counts = new_score_dic[xcorr]   
+
+        new_target_n=float(counts[0])
+        new_decoy_n=float(counts[1])
+        FDP=new_decoy_n/new_target_n
+
+        classFDR_error = float(line[4]) - float(FDP)
+        output.append([pep.split('_')[0], pep.split('_')[1], pro, str(xcorr), str(line[3]), str(line[4]), str(FDP), str(classFDR_error)])
+
     print ("Hits in novel search space: targe,decoy",novel_targetcount,novel_decoycount)
 
 
