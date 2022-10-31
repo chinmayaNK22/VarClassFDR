@@ -20,17 +20,12 @@ def class_fdr(psm_info):
     novpep_dic={}
 
     output = []
-    #pep_col=header.index("Peptide")
-    #prot_col=header.index("Protein")
 
-    #specEval_col=header.index("SpecEValue")
     psm_qval = 0.01
     decoy_prefix = "XXX_SAAV@"
     novel_prefix = "SAAV@"
     for line in psm_info:
-        #row=line.strip().split('\t')
         pro=line[1]
-        #specEval = -np.log10(float(row[specEval_col]))
         xcorr = float(line[2])
     
         if "XXX_" in pro:
@@ -54,7 +49,7 @@ def class_fdr(psm_info):
         x.append(score)
         frac=float(decoy_dic[score][0]/decoy_dic[score][1])
         y.append(frac)
-        if 0.5<score:
+        if 0<score<2:
             x_filter.append(score)
             y_filter.append(frac)
         
@@ -68,10 +63,8 @@ def class_fdr(psm_info):
     ax.plot(x,fit,label = "Polynomial with order=1", color='C1')
     ax.legend()
     plt.xlabel('xcorr')
-    plt.ylabel('Gamma (class specific decoy hits / total decoy hits)')
+    plt.ylabel('Proportion (Variant decoy/All decoys)')
     fig.savefig("fitcurve.png")
-
-    #input2=open(input_file,'r')
     
     new_noveltargetcount = 0
     new_noveldecoycount = 0
@@ -83,13 +76,13 @@ def class_fdr(psm_info):
         if novel_prefix not in pro:
             continue;
         
-        #specEval = -np.log10(float(row[specEval_col]))
         xcorr = float(line[2])
         counts = score_dic[xcorr]   
 
         target_n=float(counts[0])
         decoy_n=float(counts[1])
-        FDR=decoy_n/target_n
+        #FDR=decoy_n/target_n
+        FDR = float(line[3])
 
         novel_targetcount=float(counts[2])
         gamma = poly.polyval(xcorr, coefs)
@@ -109,11 +102,7 @@ def class_fdr(psm_info):
             new_score_dic[xcorr] = [new_noveltargetcount,new_noveldecoycount]
 
             #output.append([pep.split('_')[0], pep.split('_')[1], pro, str(xcorr), str(line[3]), str(classFDR), str(novpep_dic[pep])])
-            #line.append(str(novelFDR))
-            #line.append(str(novpep_dic[pep]))
-   
-            #output.write("\t".join(row)+"\n")
-
+            
     for line in int_output:
         pep=line[0]
         pro=line[1]
