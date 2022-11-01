@@ -6,8 +6,8 @@ import numpy.polynomial.polynomial as poly
 import matplotlib.pyplot as plt
 
 
-
-def class_fdr(psm_info):
+def class_fdr(inpath, psm_info, search_engine):
+    scores = {'sequest':'Xcorr', 'amanda':'AmandaScore'} 
     score_dic = {}
     decoy_dic={}
 
@@ -49,10 +49,15 @@ def class_fdr(psm_info):
         x.append(score)
         frac=float(decoy_dic[score][0]/decoy_dic[score][1])
         y.append(frac)
-        if 0<score<2:
-            x_filter.append(score)
-            y_filter.append(frac)
-        
+        if search_engine == 'sequest':
+            if 0<score<2:
+                x_filter.append(score)
+                y_filter.append(frac)
+        elif search_engine == 'amanda':
+            if 0<score<70:
+                x_filter.append(score)
+                y_filter.append(frac)
+            
     coefs = poly.polyfit(np.array(x_filter),np.array(y_filter), 1)
     print("coefficients",coefs)
     fit = poly.polyval(x, coefs)
@@ -62,9 +67,10 @@ def class_fdr(psm_info):
     ax.scatter(x,y,label = "Real data",s=1)
     ax.plot(x,fit,label = "Polynomial with order=1", color='C1')
     ax.legend()
-    plt.xlabel('xcorr')
+    plt.xlabel(scores[search_engine])
     plt.ylabel('Proportion (Variant decoy/All decoys)')
-    fig.savefig("fitcurve.png")
+    fig_name = os.path.join(inpath , "Least_square_regression_curve_" + scores[search_engine] + ".png")
+    fig.savefig(fig_name)
     
     new_noveltargetcount = 0
     new_noveldecoycount = 0
@@ -81,27 +87,28 @@ def class_fdr(psm_info):
 
         target_n=float(counts[0])
         decoy_n=float(counts[1])
-        #FDR=decoy_n/target_n
-        FDR = float(line[3])
+        FDR=decoy_n/target_n
+        #FDR = float(line[3])
 
         novel_targetcount=float(counts[2])
         gamma = poly.polyval(xcorr, coefs)
         gamma = (coefs[1] * xcorr) + coefs[0]
-        classFDR = FDR*gamma*(target_n/novel_targetcount)
+        if novel_targetcount != 0:
+            classFDR = FDR*gamma*(target_n/novel_targetcount)
 
-        if pep not in novpep_dic:
-            novpep_dic[pep] = classFDR
-    
-        if "XXX_SAAV@" not in pro: #write only target PSMs
-            int_output.append([pep, pro, xcorr, line[3], classFDR, novpep_dic[pep]])
-            if classFDR < psm_qval:
-                new_noveltargetcount +=1
-            elif classFDR > psm_qval:
-                new_noveldecoycount +=1
+            if pep not in novpep_dic:
+                novpep_dic[pep] = classFDR
+        
+            if "XXX_SAAV@" not in pro: #write only target PSMs
+                int_output.append([pep, pro, xcorr, line[3], classFDR, novpep_dic[pep]])
+                if classFDR < psm_qval:
+                    new_noveltargetcount +=1
+                elif classFDR > psm_qval:
+                    new_noveldecoycount +=1
 
-            new_score_dic[xcorr] = [new_noveltargetcount,new_noveldecoycount]
+                new_score_dic[xcorr] = [new_noveltargetcount,new_noveldecoycount]
 
-            #output.append([pep.split('_')[0], pep.split('_')[1], pro, str(xcorr), str(line[3]), str(classFDR), str(novpep_dic[pep])])
+                #output.append([pep.split('_')[0], pep.split('_')[1], pro, str(xcorr), str(line[3]), str(classFDR), str(novpep_dic[pep])])
             
     for line in int_output:
         pep=line[0]
@@ -111,10 +118,11 @@ def class_fdr(psm_info):
 
         new_target_n=float(counts[0])
         new_decoy_n=float(counts[1])
-        FDP=new_decoy_n/new_target_n
+        if new_target_n != 0:
+            FDP=new_decoy_n/new_target_n
 
-        classFDR_error = float(line[4]) - float(FDP)
-        output.append([pep.split('_')[0], pep.split('_')[1], pro, str(xcorr), str(line[3]), str(line[4]), str(FDP), str(classFDR_error)])
+            classFDR_error = float(line[4]) - float(FDP)
+            output.append([pep.split('_')[0], pep.split('_')[1], pro, str(xcorr), str(line[3]), str(line[4]), str(FDP), str(classFDR_error)])
 
     print ("Hits in novel search space: targe,decoy",novel_targetcount,novel_decoycount)
 
