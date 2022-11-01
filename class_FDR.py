@@ -5,7 +5,7 @@ import numpy as np
 import numpy.polynomial.polynomial as poly
 import matplotlib.pyplot as plt
 
-
+#### This section of this script is direct adaptation of BayesClassSpecificFDR.py from "https://github.com/yafeng/proteogenomics_python". However, it has been modified for Xcorr from Proteome Discoverer
 
 def class_fdr(psm_info):
     score_dic = {}
