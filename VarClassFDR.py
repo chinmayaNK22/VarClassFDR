@@ -69,8 +69,8 @@ def read_fasta(inpath, var_fasta):
                 
     return digested_peps
    
-def get_file_info(infile, pep_type, search_engine):
-    peps = read_fasta(fastas, var_fasta)
+def get_file_info(infile, pep_type, search_engine, fastas_path, var_fasta):
+    peps = read_fasta(fastas_path, var_fasta)
     mut_peps = digest_fasta(var_fasta)
     if pep_type == 'target':
         header, table = fetch_sqlite3_db(infile, pep_type)
@@ -117,12 +117,12 @@ def get_file_info(infile, pep_type, search_engine):
                     
                 yield mod_pep + '_' + mod, pro, score, q_val
 
-def run_varclassfdr(infile, search_engine):
+def run_varclassfdr(infile, search_engine, fastas_path, var_fasta):
     output = []
-    for info in get_file_info(infile, 'target', search_engine):
+    for info in get_file_info(infile, 'target', search_engine, fastas_path, var_fasta):
         output.append(info)
     
-    for info in get_file_info(infile, 'decoy', search_engine):
+    for info in get_file_info(infile, 'decoy', search_engine, fastas_path, var_fasta):
         output.append(info)
 
     scores = {idx:float(o[2]) for idx, o in enumerate(output)}
@@ -139,4 +139,4 @@ def run_varclassfdr(infile, search_engine):
        outf.writelines('\t'.join(i) + '\n' for i in result)
 
 
-run_varclassfdr(infile, 'amanda')    
+run_varclassfdr(infile, 'amanda', fastas, var_fasta)    
