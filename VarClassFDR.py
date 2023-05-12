@@ -1,35 +1,28 @@
-from read_fasta_file_v2 import readfasta, decoy_pro
 from itertools import islice
-from protein_digestor_v2 import ProteinDigestion
-from class_FDR import class_fdr
 import os
-from pdResult_parser import fetch_sqlite3_db
+from scripts.read_fasta_file_v2 import readfasta, decoy_pro
+from scripts.protein_digestor_v2 import ProteinDigestion
+from scripts import pdResult_parser
+from scripts import class_FDR
+import argparse
 
-infile = "F:\\NTNU_M_avium_Proteomics\\PRIDE\\M_avium_Mavium_hominissuis_variant_proteome_search_082021.pdResult"
+parser = argparse.ArgumentParser(description='''Calculate False Discovery Rate (FDR) for variant peptides identified from Proteome Discoverer tool using various search engines (SequestHT//Mascot//MSAmanda)''')
 
-var_fasta = "F:\\NTNU_M_avium_Proteomics\\classFDR\\Mavium_hominissuis_OCU464_GCF_001865635.4_ASM186563v4_protein_variant_DB_082021.fasta"
+parser.add_argument('infile', metavar='-ip', type=str, nargs='+', help='Proteome Discoverer output in msf/pdResult format')
+parser.add_argument('fastas', metavar='-vf', type=str, nargs='+', help='Path to a reference proteome FASTA file. Provide path to a folder if more than single FASTA files were used for the search apart from variant FASTA file')
+parser.add_argument('var_fasta', metavar='-rf', type=str, nargs='+', help='Variant protein sequences used for the search in FASTA format')
+parser.add_argument('searchEngine', metavar='-SE', type=str, nargs='+', help='''Currently, database search output from SequestHT (1), Mascot (2)and MSAmanda (3)can be used.
+                                                                                Each search engines is annotated with a number, which has to be provide when defining the type of search engine used.''')
+parser.add_argument('q-value_cutoff', metavar='-fdr', type=str, default=0.01, nargs='+', help='Set the Class-FDR (q-value) cutoff to be applied. Ex: 1%% class-FDR will be 0.01 and 5%% will be 0.05')
+parser.add_argument('--version', action='version', version='%(prog)s 1.0')
 
-fastas = "F:\\NTNU_M_avium_Proteomics\\classFDR"
+args = parser.parse_args()
 
-def get_header_index(inlist):
-    pro = inlist.index('ParentProteinAccessions')
+algorithm_score_type = {'Sequest HT':'XCorr', 'MS Amanda 2.0':'AmandaScore', 'Mascot':'IonScore'}
 
-    pep = inlist.index('Sequence')
+def header_index(inlist, column_name):
+    return inlist.index(column_name)
 
-    mod_pep = inlist.index('ModifiedSequence')
-
-    mod = inlist.index('Modifications')
-
-    xcorr = inlist.index('XCorr')
-
-    try:
-        msamandascore = inlist.index('AmandaScore')
-    except:
-        raise ("The search result does not contain AmandaScore")
-
-    fdr = inlist.index('PercolatorqValue')
-
-    return pro, pep, mod_pep, mod, xcorr, fdr, msamandascore
 
 def digest_fasta(infasta):
     dicts = {}
@@ -68,75 +61,91 @@ def read_fasta(inpath, var_fasta):
                     digested_peps |= digest_fasta(os.path.join(inpath, files))
                 
     return digested_peps
+
    
-def get_file_info(infile, pep_type, search_engine, fastas_path, var_fasta):
+def get_file_info(infile, fastas_path, var_fasta, search_eng):
     peps = read_fasta(fastas_path, var_fasta)
     mut_peps = digest_fasta(var_fasta)
-    if pep_type == 'target':
-        header, table = fetch_sqlite3_db(infile, pep_type)
-        a = get_header_index(header)
-        for i in table:
-            pep = i[a[1]]
-            mod_pep = i[a[2]]
-            pro = i[a[0]]
-            mod = i[a[3]]
-            score = ""
-            if search_engine == 'sequest':
-                score = i[a[4]]
-            elif search_engine == 'amanda':
-                score = i[a[-1]]
-            q_val = i[a[5]]
-            if score != None:
-                pro = ""
-                if pep.upper() in peps:
-                    pro = ';'.join(peps[pep.upper()])
-                elif pep.upper() in mut_peps:
-                    pro = ';'.join('SAAV@' + p for p in mut_peps[pep.upper()])
-
-                yield mod_pep + '_' + mod, pro, score, q_val
-
-    elif pep_type == 'decoy':
-        header, table = fetch_sqlite3_db(infile, pep_type)
-        a = get_header_index(header)
-        for i in table:
-            pep = i[a[1]]
-            mod_pep = i[a[2]]
-            pro = i[a[0]]
-            mod = i[a[3]]
-            score = ""
-            if search_engine == 'sequest':
-                score = i[a[4]]
-            elif search_engine == 'amanda':
-                score = i[a[-1]]
-            q_val = i[a[5]]
-            if score != None:
-                if 'decoy_' + pep.upper() in peps:
-                    pro = ';'.join(peps['decoy_' + pep.upper()])
-                elif 'decoy_' + pep.upper() in mut_peps:
-                    pro = ';'.join('XXX_SAAV@'+ p.lstrip('XXX_') for p in mut_peps['decoy_' + pep.upper()])
-                    
-                yield mod_pep + '_' + mod, pro, score, q_val
-
-def run_varclassfdr(infile, search_engine, fastas_path, var_fasta):
-    output = []
-    for info in get_file_info(infile, 'target', search_engine, fastas_path, var_fasta):
-        output.append(info)
+    t_header, t_table = pdResult_parser.fetch_sqlite3_db(infile, 'target')
+    d_header, d_table = pdResult_parser.fetch_sqlite3_db(infile, 'decoy')
     
-    for info in get_file_info(infile, 'decoy', search_engine, fastas_path, var_fasta):
-        output.append(info)
+    search_engines = {i[header_index(t_header, 'IdentifyingNodeTypeName')]:1 for i in t_table}
+    print (f'The search was performed using ', ' and '.join(list(search_engines.keys())), 'alogorithms.')
 
-    scores = {idx:float(o[2]) for idx, o in enumerate(output)}
+    for k in search_engines.keys():
+        if search_eng == k:
+            spectra_hits = []
+            for i in t_table:
+                pep = i[header_index(t_header,'Sequence')] 
+                mod_pep = i[header_index(t_header,'ModifiedSequence')] 
+                pro = i[header_index(t_header,'ParentProteinAccessions')]
+                mod = i[header_index(t_header,'Modifications')] 
+                score = i[header_index(t_header, algorithm_score_type[k])]
+                q_val = i[header_index(t_header,'PercolatorqValue')]
+                rawfile = i[header_index(t_header, 'SpectrumFileName')]
+                scan = str(i[header_index(t_header, 'FirstScan')])
+                rt = str(round(float(i[header_index(t_header,'RetentionTime')]),4))
+                #pep_id = i[header_index(t_header,'PeptideID')]
+                if score != None:
+                    pro = ""
+                    if pep.upper() in peps:
+                        pro = ';'.join(peps[pep.upper()])
+                    elif pep.upper() in mut_peps:
+                        pro = ';'.join('SAAV@' + p for p in mut_peps[pep.upper()])
 
-    sort_output = [output[k] for k, v in sorted(scores.items(), key=lambda item: item[1], reverse=True)]
+                    spectra_hits.append([mod_pep + '_' + mod, pro, rt, scan, rawfile, score, q_val])
+            
+            for d_i in d_table:
+                pep = d_i[header_index(d_header,'Sequence')]
+                mod_pep = d_i[header_index(d_header,'ModifiedSequence')] 
+                pro = d_i[header_index(d_header,'ParentProteinAccessions')]
+                mod = d_i[header_index(d_header,'Modifications')] 
+                score = d_i[header_index(d_header, algorithm_score_type[k])]
+                q_val = d_i[header_index(d_header,'PercolatorqValue')]
+                rawfile = d_i[header_index(d_header, 'SpectrumFileName')]
+                
+                if score != None:
+                    if 'decoy_' + pep.upper() in peps:
+                        pro = ';'.join(peps['decoy_' + pep.upper()])
+                    elif 'decoy_' + pep.upper() in mut_peps:
+                        pro = ';'.join('XXX_SAAV@'+ p.lstrip('XXX_') for p in mut_peps['decoy_' + pep.upper()])
 
-    inpath = os.path.split(infile)[0]
+                    spectra_hits.append([mod_pep + '_' + mod, pro, '','', rawfile, score, q_val])
+
+            return k, spectra_hits
+
+def run_classfdr(infile, fastas_path, var_fasta, search_id, fdr_cutoff, percolator):
+    searchEngines = {'1':'Sequest HT', '2':'Mascot', '3':'MS Amanda 2.0'}
+
+    searchEngine, output = get_file_info(infile, fastas_path, var_fasta, searchEngines[str(search_id)])
     
-    result = class_fdr(inpath, sort_output, search_engine)
+    print (f'There were ', len(output), ' PSMs stored from ', searchEngine, ' search algorithm hits.')
+    
+    if len(output) != 0:
 
-    outfile = "{0}_SequestHT_classFDR.txt".format(infile.rstrip(infile.split('.')[-1]).rstrip('.'))
-    with open(outfile, 'w') as outf:
-       outf.write('Peptide\tModification\tProtein\tXcorr\tPercolator qvalue\tclass-FDR\tFalse Discovery Proportion (FDP)\tclass-FDR error\n')
-       outf.writelines('\t'.join(i) + '\n' for i in result)
+        scores = {idx:float(o[-2]) for idx, o in enumerate(output)}
 
+        sort_output = [output[k] for k, v in sorted(scores.items(), key=lambda item: item[1], reverse=True)]
 
-run_varclassfdr(infile, 'amanda', fastas, var_fasta)    
+        ### Perform class-FDR calculation
+        inpath = os.path.split(infile)[0]
+        
+        result = class_FDR._classfdr(inpath, sort_output, algorithm_score_type[searchEngine], fdr_cutoff, percolator)
+
+        ### Write the result
+        
+        if percolator.upper() == "PERCOLATOR":
+            outfile = infile.rstrip(infile.split('.')[-1]).rstrip('.') + "_" + searchEngines[str(search_id)] + '_Percolator_classFDR.txt'
+        else:
+            outfile = infile.rstrip(infile.split('.')[-1]).rstrip('.') + "_" + searchEngines[str(search_id)] + '_classFDR.txt'
+            
+        print (f'The class-FDR calculation was performed for ', len(result), 'PSMs and stored in', outfile)
+        
+        with open(outfile, 'w') as outf:
+           outf.write('Peptide\tModification\tProtein\tRT (min)\tScan\tRaw File\tXcorr\tPercolator qvalue\tGlobal-FDR\tclass-FDR\tFalse Discovery Proportion (FDP)\tclass-FDR error\n')
+           outf.writelines('\t'.join(i) + '\n' for i in result)
+    else:
+        raise Exception
+    
+if __name__ == '__main__':
+    run_classfdr(args.infile[0], args.fastas[0], args.var_fasta[0], args.searchEngine[0], args.q-value_cutoff[0], '')
