@@ -2,11 +2,12 @@
 
 Measurement of False Discovery Rate (FDR) specific to variant peptides (class-FDR) for is crucial their accurate identification and removes any false hits being considered as true hits based on Global-FDR calculation. Therefore, we developed a Python-based tool for the calculation of class-FDR for variant peptides identified using database search in Proteome Discoverer (Thermo Scientific).
 
-## Command prompt usage
+## Command line usage of VarClassFDR.py
 ```
->python VarClassFDR.py -h
+>python VarClassFDR.py input.msf variant_proteome.fasta reference_proteome.fasta 1 0.01
 ```
 
+## Details of required inputs
 ```
 usage: VarClassFDR.py [-h] [--version] -ip [-ip ...] -vf [-vf ...] -rf [-rf ...] -SE [-SE ...] -fdr [-fdr ...]
 
